@@ -1,26 +1,23 @@
 package ncl
 
-import org.apache.spark.rdd.RDD
-
 import scala.collection.mutable
 
 object NCListBuilder {
-  def build(rdd: RDD[org.apache.spark.sql.Row]): NCList = {
+  def build[T](list: List[(Interval[Long], T)]): NCList = {
 
     var topNCList = NCList(Array.empty[NCList], 0, Array.empty[Int])
     var landingNCList = NCList(Array.empty[NCList], 0, Array.empty[Int])
 
-    var rddWithIndices = rdd.map(x => (x(0).toString.toInt, x(1).toString.toInt)).zipWithIndex().map{case (k,v) => (v,k)}
-    var sortedIndices = rddWithIndices.sortBy(_._2._2,false).sortBy(_._2._1).map(_._1).collect()
-
+    var listWithIndices = list.zipWithIndex.map{case (k,v) => (v,k)}
+    var sortedIndices = listWithIndices.sortWith((x, y) => x._2._1.end > y._2._1.end).sortWith((x, y) => x._2._1.start < y._2._1.start).map(x => x._1)
 
     var stack = mutable.Stack[NCListBuildingStack]()
 
 
     for( i <- 0 until sortedIndices.length) {
-      var rgid = sortedIndices(i).toInt
-      var currentEnd = rddWithIndices.lookup(rgid).map(_._2).head
-      while(!stack.isEmpty && rddWithIndices.lookup(stack.top.rgid).map(_._2).head < currentEnd)
+      var rgid = sortedIndices(i)
+      var currentEnd = listWithIndices(rgid)._2._1.end
+      while(!stack.isEmpty && listWithIndices(stack.top.rgid)._2._1.end < currentEnd)
         stack.pop
 
       landingNCList = if (stack.isEmpty) topNCList else stack.top.ncList
