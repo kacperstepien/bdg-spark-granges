@@ -15,7 +15,7 @@ class NCListTree[T](allRegions: List[(Interval[Long], T)]) extends Serializable 
     var walkingStack = mutable.Stack[NCListWalkingStack]()
     walkingStack.clear()
 
-    var n = findLandingChild(topNcList, backpack[T])
+    var n = findLandingChild(topNcList, backpack)
     if (n < 0)
       return Nil
 
