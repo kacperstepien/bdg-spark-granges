@@ -20,6 +20,7 @@ package genApp
 import java.io.PrintWriter
 import java.util.Date
 
+import ncl.NCListsJoinStrategy
 import org.apache.spark.sql.types.{LongType, StructField, StructType}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession}
@@ -141,7 +142,7 @@ object Main {
 
       val sqlQuery = "select count(*) from s1 JOIN s2 on (end1>=start2 and start1<=end2)"
 
-      log(size+" Size"+ "\t" +"CartesianJoin"+ "\t" +"IntervalTreeJoin",pw)
+      log(size+" Size"+ "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
       for (j <- 1 to loops) {
         spark.experimental.extraStrategies = Nil
         var start = System.nanoTime()
@@ -203,9 +204,9 @@ object Main {
 
       val sqlQuery = "select count(*) from s1 JOIN s2 on (end1>=start2 and start1<=end2)"
 
-      log(size+" Size"+ "\t" +"CartesianJoin"+ "\t" +"IntervalTreeJoin",pw)
+      log(size+" Size"+ "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
       for (j <- 1 to loops) {
-        spark.experimental.extraStrategies = Nil
+        spark.experimental.extraStrategies = new NCListsJoinStrategy(spark) :: Nil
         var start = System.nanoTime()
         sqlContext.sql(sqlQuery).count
         var end = System.nanoTime()
