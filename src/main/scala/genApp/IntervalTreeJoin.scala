@@ -48,22 +48,33 @@ case class IntervalTreeJoin(left: SparkPlan,
 
       (new Interval[Long](v1Key.getLong(0), v1Key.getLong(1)),
         x.copy())
-    } )
+    })
     val v2 = right.execute()
     val v2kv = v2.map(x => {
       val v2Key = streamKeyGenerator(x)
       (new Interval[Long](v2Key.getLong(0), v2Key.getLong(1)),
         x.copy())
-    } )
+    })
     /* As we are going to collect v1 and build an interval tree on its intervals,
     make sure that its size is the smaller one. */
-    assert(v1.count <= v2.count)
-    val v3 = IntervalTreeJoinImpl.overlapJoin(context.sparkContext, v1kv, v2kv).flatMap(l => l._2.map(r => (l._1, r)))
-    v3.map {
-      case (l: InternalRow, r: InternalRow) => {
-        val joiner = GenerateUnsafeRowJoiner.create(left.schema, right.schema);
-        joiner.join(l.asInstanceOf[UnsafeRow], r.asInstanceOf[UnsafeRow]).asInstanceOf[InternalRow] //resultProj(joinedRow(l, r)) joiner.joiner
+    if (v1.count <= v2.count) {
+      val v3 = IntervalTreeJoinImpl.overlapJoin(context.sparkContext, v1kv, v2kv).flatMap(l => l._2.map(r => (l._1, r)))
+      v3.map {
+        case (l: InternalRow, r: InternalRow) => {
+          val joiner = GenerateUnsafeRowJoiner.create(left.schema, right.schema);
+          joiner.join(l.asInstanceOf[UnsafeRow], r.asInstanceOf[UnsafeRow]).asInstanceOf[InternalRow] //resultProj(joinedRow(l, r)) joiner.joiner
+        }
       }
     }
+    else {
+      val v3 = IntervalTreeJoinImpl.overlapJoin(context.sparkContext, v2kv, v1kv).flatMap(l => l._2.map(r => (l._1, r)))
+      v3.map {
+        case (r: InternalRow, l: InternalRow) => {
+          val joiner = GenerateUnsafeRowJoiner.create(left.schema, right.schema);
+          joiner.join(l.asInstanceOf[UnsafeRow], r.asInstanceOf[UnsafeRow]).asInstanceOf[InternalRow] //resultProj(joinedRow(l, r)) joiner.joiner
+        }
+      }
+    }
+
   }
 }

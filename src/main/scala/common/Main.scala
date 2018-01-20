@@ -15,11 +15,12 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package genApp
+package common
 
 import java.io.PrintWriter
 import java.util.Date
 
+import genApp.IntervalTreeJoinStrategy
 import ncl.NCListsJoinStrategy
 import org.apache.spark.sql.types.{LongType, StructField, StructType}
 import org.apache.spark.rdd.RDD
@@ -32,6 +33,8 @@ import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.apache.spark.sql.types._
 
 import scala.util.Random
+import java.io._
+import java.text.SimpleDateFormat
 
 object Main {
   case class RecordData1(start1: Long, end1: Long) extends Serializable
@@ -43,8 +46,8 @@ object Main {
     }
 
     if ("random".equals(args(0))) {
-      if (args.length < 5) {
-        System.err.println("four argument required, step start stop loops")
+      if (args.length < 6) {
+        System.err.println("four argument required, step1 step2 start stop loops")
         System.exit(1)
       } else {
         randomTest(args)
@@ -52,8 +55,8 @@ object Main {
     }
 
     if ("bio".equals(args(0))) {
-      if (args.length < 7) {
-        System.err.println("four argument required, step start stop loops")
+      if (args.length < 8) {
+        System.err.println("four argument required, step1 step2 start stop loops")
         System.exit(1)
       } else {
         bioTest(args)
@@ -76,16 +79,18 @@ object Main {
 
   def bioTest(args: Array[String]): Unit = {
     // PrintWriter
-    import java.io._
-    import java.text.SimpleDateFormat
+
     val fileName = new SimpleDateFormat("'bioTest'yyyyMMddHHmm'.txt'").format(new Date())
+
+
     val pw = new PrintWriter(new File(fileName))
 
 
-    val step = args(1).toInt
-    val start = args(2).toInt
-    val stop = args(3).toInt
-    val loops = args(4).toInt
+    val stepFeatures = args(1).toInt
+    val stepAlignments = args(2).toInt
+    val start = args(3).toInt
+    val stop = args(4).toInt
+    val loops = args(5).toInt
     val spark = SparkSession
       .builder()
       .appName("ExtraStrategiesGenApp")
@@ -97,18 +102,15 @@ object Main {
     Random.setSeed(4242)
 
 
-    //var features: FeatureRDD = sc.loadFeatures(args(5))
-    var alignments1: AlignmentRecordRDD = sc.loadAlignments(args(5))
-    var alignments2: AlignmentRecordRDD = sc.loadAlignments(args(6))
+    var features: FeatureRDD = sc.loadFeatures(args(6))
+    var alignments: AlignmentRecordRDD = sc.loadAlignments(args(7))
 
-    //var featuresRdd: RDD[Feature] = features.rdd
-    var alignments1Rdd: RDD[AlignmentRecord] = alignments1.rdd
-    var alignments2Rdd: RDD[AlignmentRecord] = alignments2.rdd
+    var featuresRdd: RDD[Feature] = features.rdd
+    var alignmentsRdd: RDD[AlignmentRecord] = alignments.rdd
     //get only interesting columns
 
-    //val fRdd = featuresRdd.map(rec => Row(rec.getStart(), rec.getEnd()));
-    val a1Rdd = alignments1Rdd.map(rec => Row(rec.getStart(), rec.getEnd()));
-    val a2Rdd = alignments2Rdd.map(rec => Row(rec.getStart(), rec.getEnd()));
+    val fRdd = featuresRdd.map(rec => Row(rec.getStart(), rec.getEnd()));
+    val aRdd = alignmentsRdd.map(rec => Row(rec.getStart(), rec.getEnd()));
     //val alignmentsSchema = StructType(Seq(StructField("start2", LongType), StructField("end2", LongType)))
     //val featuresSchema = StructType(Seq(StructField("start1", LongType), StructField("end1", LongType)))
 
@@ -124,12 +126,13 @@ object Main {
 
 
     for (i <-start to stop) {
-      var size = i*step
+      var sizeFeatures = i*stepFeatures
+      var sizeAlignments = i*stepAlignments
       /*var rdd1 = sc.parallelize((1 to size).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))
       var rdd2 = sc.parallelize((1 to size).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))*/
       //var rdd1 = sc.parallelize(fRdd.takeSample(false,size,4242))
-      var rdd1 = sc.parallelize(a1Rdd.take(size))
-      var rdd2 = sc.parallelize(a2Rdd.take(size))
+      var rdd1 = sc.parallelize(fRdd.take(sizeFeatures))
+      var rdd2 = sc.parallelize(aRdd.take(sizeAlignments))
       //var rdd1 = sc.parallelize(a1Rdd.takeSample(false,size,4242))
       //var rdd2 = sc.parallelize(a2Rdd.takeSample(false,size,4242))
 
@@ -140,29 +143,45 @@ object Main {
       var ds2 = sqlContext.createDataFrame(rdd2, schema2)
       ds2.createOrReplaceTempView("s2")
 
-      val sqlQuery = "select count(*) from s1 JOIN s2 on (end1>=start2 and start1<=end2)"
+      val sqlQuery = "select * from s1 JOIN s2 on (end1>=start2 and start1<=end2)"
 
-      log(size+" Size"+ "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
+      log(sizeFeatures+"-"+sizeAlignments +" Size"+ "\t" + "CartessianJoin" + "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
       for (j <- 1 to loops) {
         spark.experimental.extraStrategies = Nil
+        if (i==1 && j==1) {
+          //repeat test, because of lazy loading
+          sqlContext.sql(sqlQuery).count
+        }
         var start = System.nanoTime()
         sqlContext.sql(sqlQuery).count
         var end = System.nanoTime()
 
+        var cartesianTime = (end - start) / 1000
+
+        spark.experimental.extraStrategies = new NCListsJoinStrategy(spark) :: Nil
         if (i==1 && j==1) {
           //repeat test, because of lazy loading
-          start = System.nanoTime()
           sqlContext.sql(sqlQuery).count
-          end = System.nanoTime()
         }
+        start = System.nanoTime()
+        sqlContext.sql(sqlQuery).count
+        end = System.nanoTime()
 
-        var cartesianTime = (end - start) / 1000
+
+
+        var nclistTime = (end - start) / 1000
+
+
         spark.experimental.extraStrategies = new IntervalTreeJoinStrategy(spark) :: Nil
+        if (i==1 && j==1) {
+          //repeat test, because of lazy loading
+          sqlContext.sql(sqlQuery).count
+        }
         start = System.nanoTime()
         sqlContext.sql(sqlQuery).count
         end = System.nanoTime()
         var intervalTime = (end - start) / 1000
-        log(j + "/" + loops + "\t" + cartesianTime + "\t" + intervalTime, pw)
+        log(j + "/" + loops + "\t" + cartesianTime + "\t" + nclistTime + "\t" + intervalTime, pw)
       }
     }
 
@@ -177,10 +196,11 @@ object Main {
     val pw = new PrintWriter(new File(fileName))
 
 
-    val step = args(1).toInt
-    val start = args(2).toInt
-    val stop = args(3).toInt
-    val loops = args(4).toInt
+    val stepFeatures = args(1).toInt
+    val stepAlignments = args(2).toInt
+    val start = args(3).toInt
+    val stop = args(4).toInt
+    val loops = args(5).toInt
     val spark = SparkSession
       .builder()
       .appName("ExtraStrategiesGenApp")
@@ -192,9 +212,10 @@ object Main {
     Random.setSeed(4242)
 
     for (i <-start to stop) {
-      var size = i*step
-      var rdd1 = sc.parallelize((1 to size).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))
-      var rdd2 = sc.parallelize((1 to size).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))
+      var sizeFeatures = i*stepFeatures
+      var sizeAlignments = i*stepAlignments
+      var rdd1 = sc.parallelize((1 to sizeFeatures).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))
+      var rdd2 = sc.parallelize((1 to sizeAlignments).map(x => {val r1=Random.nextInt(1000).toLong; val r2=Random.nextInt(1000).toLong; if (r1<=r2) {Row(r1,r2)} else {Row(r2,r1)}}))
       val schema1 = StructType(Seq(StructField("start1", LongType), StructField("end1", LongType)))
       val schema2 = StructType(Seq(StructField("start2", LongType), StructField("end2", LongType)))
       var ds1 = sqlContext.createDataFrame(rdd1, schema1)
@@ -204,9 +225,9 @@ object Main {
 
       val sqlQuery = "select count(*) from s1 JOIN s2 on (end1>=start2 and start1<=end2)"
 
-      log(size+" Size"+ "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
+      log(sizeFeatures+"-"+sizeAlignments +" Size"+ "\t" + "CartessianJoin" + "\t" +"NCListsJoin"+ "\t" +"IntervalTreeJoin",pw)
       for (j <- 1 to loops) {
-        spark.experimental.extraStrategies = new NCListsJoinStrategy(spark) :: Nil
+        spark.experimental.extraStrategies = Nil
         var start = System.nanoTime()
         sqlContext.sql(sqlQuery).count
         var end = System.nanoTime()
@@ -217,14 +238,29 @@ object Main {
           sqlContext.sql(sqlQuery).count
           end = System.nanoTime()
         }
-
         var cartesianTime = (end - start) / 1000
+
+        spark.experimental.extraStrategies = new NCListsJoinStrategy(spark) :: Nil
+        start = System.nanoTime()
+        sqlContext.sql(sqlQuery).count
+        end = System.nanoTime()
+
+        if (i==1 && j==1) {
+          //repeat test, because of lazy loading
+          start = System.nanoTime()
+          sqlContext.sql(sqlQuery).count
+          end = System.nanoTime()
+        }
+
+        var nclistTime = (end - start) / 1000
+
+
         spark.experimental.extraStrategies = new IntervalTreeJoinStrategy(spark) :: Nil
         start = System.nanoTime()
         sqlContext.sql(sqlQuery).count
         end = System.nanoTime()
         var intervalTime = (end - start) / 1000
-        log(j + "/" + loops + "\t" + cartesianTime + "\t" + intervalTime, pw)
+        log(j + "/" + loops + "\t" + cartesianTime + "\t" + nclistTime + "\t" + intervalTime, pw)
       }
     }
 

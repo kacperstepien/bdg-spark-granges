@@ -1,6 +1,6 @@
 package ncl
 
-import genApp.ExtractRangeJoinKeys
+import common.ExtractRangeJoinKeys
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
