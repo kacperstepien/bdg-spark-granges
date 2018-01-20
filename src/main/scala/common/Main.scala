@@ -82,15 +82,17 @@ object Main {
 
     val fileName = new SimpleDateFormat("'bioTest'yyyyMMddHHmm'.txt'").format(new Date())
 
-
     val pw = new PrintWriter(new File(fileName))
-
 
     val stepFeatures = args(1).toInt
     val stepAlignments = args(2).toInt
     val start = args(3).toInt
     val stop = args(4).toInt
     val loops = args(5).toInt
+    val featuresFilePath = args(6)
+    val featuresFileName = featuresFilePath.substring(featuresFilePath.lastIndexOf('/')+1)
+    val alignmentsFilePath = args(7)
+    val alignmentsFileName = alignmentsFilePath.substring(alignmentsFilePath.lastIndexOf('/')+1)
     val spark = SparkSession
       .builder()
       .appName("ExtraStrategiesGenApp")
@@ -102,8 +104,8 @@ object Main {
     Random.setSeed(4242)
 
 
-    var features: FeatureRDD = sc.loadFeatures(args(6))
-    var alignments: AlignmentRecordRDD = sc.loadAlignments(args(7))
+    var features: FeatureRDD = sc.loadFeatures(featuresFilePath)
+    var alignments: AlignmentRecordRDD = sc.loadAlignments(alignmentsFilePath)
 
     var featuresRdd: RDD[Feature] = features.rdd
     var alignmentsRdd: RDD[AlignmentRecord] = alignments.rdd
@@ -123,7 +125,7 @@ object Main {
 
 
 
-
+    log(featuresFileName+  "\t" + alignmentsFileName,pw)
 
     for (i <-start to stop) {
       var sizeFeatures = i*stepFeatures
