@@ -3,14 +3,14 @@ package pl.edu.pw.ii.biodatageeks.tests
 import java.io.{OutputStreamWriter, PrintWriter}
 
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
-import org.biodatageeks.rangejoins.IntervalTree.IntervalTreeJoinStrategyOptim
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
 import org.bdgenomics.utils.instrumentation.{Metrics, MetricsListener, RecordedMetrics}
+import org.biodatageeks.rangejoins.IntervalTree.IntervalTreeJoinStrategyOptim
 import org.biodatageeks.rangejoins.genApp.IntervalTreeJoinStrategy
 import org.scalatest.{BeforeAndAfter, FunSuite}
 
-class IntervalTreeTestSuite extends FunSuite with DataFrameSuiteBase with BeforeAndAfter{
+class IntervalTreeGenAppTestSuite extends FunSuite with DataFrameSuiteBase with BeforeAndAfter{
   val schema1 = StructType(Seq(StructField("start1",IntegerType ), StructField("end1", IntegerType)))
   val schema2 = StructType(Seq(StructField("start2", IntegerType), StructField("end2", IntegerType)))
   val schema3 = StructType(Seq(StructField("start1", IntegerType), StructField("end1", IntegerType), StructField("start2", IntegerType), StructField("end2", IntegerType)))
@@ -21,7 +21,7 @@ class IntervalTreeTestSuite extends FunSuite with DataFrameSuiteBase with Before
   val writer = new PrintWriter(new OutputStreamWriter(System.out))
 
   before {
-    spark.experimental.extraStrategies = new IntervalTreeJoinStrategyOptim(spark) :: Nil
+    spark.experimental.extraStrategies = new IntervalTreeJoinStrategy(spark) :: Nil
     Metrics.initialize(sc)
 
     sc.addSparkListener(metricsListener)
@@ -129,6 +129,7 @@ class IntervalTreeTestSuite extends FunSuite with DataFrameSuiteBase with Before
 
     Metrics.print(writer, Some(metricsListener.metrics.sparkMetrics.stageTimes))
     writer.flush()
+    //writer.
 
   }
 }

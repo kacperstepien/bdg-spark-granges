@@ -4,20 +4,17 @@ name := """bdg-spark-granges"""
 
 version := "0.1-SNAPSHOT"
 
-organization := "pl.edu.pw.ii.biodatageeks"
+organization := "org.biodatageeks"
 
 scalaVersion := "2.11.8"
 
-val DEFAULT_SPARK_2_VERSION = "2.2.0"
-val DEFAULT_HADOOP_VERSION = "2.6.0-cdh5.11.0"
+val DEFAULT_SPARK_2_VERSION = "2.2.1"
+val DEFAULT_HADOOP_VERSION = "2.6.5"
 
 
 lazy val sparkVersion = Properties.envOrElse("SPARK_VERSION", DEFAULT_SPARK_2_VERSION)
 lazy val hadoopVersion = Properties.envOrElse("SPARK_HADOOP_VERSION", DEFAULT_HADOOP_VERSION)
 
-libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-core" % hadoopVersion excludeAll ExclusionRule(organization = "javax.servlet")
-libraryDependencies += "org.apache.hadoop" % "hadoop-client" % hadoopVersion excludeAll ExclusionRule(organization = "javax.servlet")
-libraryDependencies += "org.apache.hadoop" % "hadoop-common" % hadoopVersion excludeAll ExclusionRule(organization = "javax.servlet")
 
 libraryDependencies +=  "org.apache.spark" % "spark-core_2.11" % sparkVersion % "provided"
 
@@ -25,6 +22,18 @@ libraryDependencies +=  "org.apache.spark" % "spark-sql_2.11" % sparkVersion
 libraryDependencies += "com.holdenkarau" % "spark-testing-base_2.11" % "2.2.0_0.7.4" % "test" excludeAll ExclusionRule(organization = "javax.servlet") excludeAll (ExclusionRule("org.apache.hadoop"))
 
 libraryDependencies += "org.apache.spark" %% "spark-hive"       % "2.0.0" % "test"
+
+libraryDependencies += "org.bdgenomics.adam" %% "adam-core-spark2" % "0.22.0"
+libraryDependencies += "org.bdgenomics.adam" %% "adam-apis-spark2" % "0.22.0"
+libraryDependencies += "org.bdgenomics.adam" %% "adam-cli-spark2" % "0.22.0"
+libraryDependencies += "org.bdgenomics.utils" %% "utils-misc-spark2" % "0.2.10"
+libraryDependencies += "org.scala-lang" % "scala-library" % "2.11.8"
+
+
+libraryDependencies += "org.hammerlab.bdg-utils" %% "cli" % "0.3.0"
+
+libraryDependencies += "com.github.samtools" % "htsjdk" % "2.14.1"
+
 fork := true
 
 javaOptions in run ++= Seq(
@@ -56,6 +65,15 @@ assemblyMergeStrategy in assembly := {
   case PathList("au", xs@_*) => MergeStrategy.first
   case ("META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat") => MergeStrategy.first
   case ("images/ant_logo_large.gif") => MergeStrategy.first
+
+  case "overview.html" => MergeStrategy.rename
+  case "mapred-default.xml" => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
 
   case x =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value
