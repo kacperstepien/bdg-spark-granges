@@ -1,8 +1,7 @@
 package org.biodatageeks.rangejoins.NCList
 
-import rangejoins.methods.NCList.NCListWalkingStack
 
-import scala.collection.mutable.{ArrayBuffer, ArrayStack}
+import scala.collection.mutable.ArrayStack
 import scala.util.control.Breaks._
 
 class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
