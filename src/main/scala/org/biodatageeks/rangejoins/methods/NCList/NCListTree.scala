@@ -1,6 +1,8 @@
 package org.biodatageeks.rangejoins.NCList
 
-import scala.collection.mutable
+import rangejoins.methods.NCList.NCListWalkingStack
+
+import scala.collection.mutable.{ArrayBuffer, ArrayStack}
 import scala.util.control.Breaks._
 
 class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
@@ -10,9 +12,10 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
   def getAllOverlappings(processedInterval: Interval[Int]) = allOverlappingRegions(processedInterval, ncList, allRegions)
 
   private def allOverlappingRegions(processedInterval: Interval[Int], topNcList: NCList, intervalList: List[(Interval[Int],T)]): List[(Interval[Int], T)] = {
-    var backpack = Backpack(intervalList, processedInterval)
+    val intervalArray = intervalList.toArray
+    val backpack = Backpack(intervalArray, processedInterval)
     var resultList = List[(Interval[Int], T)]()
-    var walkingStack = mutable.Stack[NCListWalkingStack]()
+    val walkingStack = ArrayStack[NCListWalkingStack]()
     walkingStack.clear()
 
     var n = findLandingChild(topNcList, backpack)
@@ -21,16 +24,16 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
 
     var ncList = moveToChild(topNcList, n, walkingStack)
     while (ncList != null) {
-      var stackElt = peekNCListWalkingStackElt(walkingStack)
-      var rgid = stackElt.parentNcList.rgidBuf(stackElt.n)
+      val stackElt = peekNCListWalkingStackElt(walkingStack)
+      val rgid = stackElt.parentNcList.rgidBuf(stackElt.n)
       breakable {
-        if (backpack.intervalList(rgid)._1.start > backpack.processedInterval.end) {
+        if (backpack.intervalArr(rgid)._1.start > backpack.processedInterval.end) {
           /* Skip all further siblings of 'nclist'. */
           ncList = moveToRightUncle(walkingStack)
           break //continue
         }
 
-        resultList :+= intervalList(rgid)
+        resultList :+= intervalArray(rgid)
         n = findLandingChild(ncList, backpack)
         /* Skip first 'n' or all children of 'nclist'. */
         ncList = if (n >= 0) moveToChild(ncList, n, walkingStack) else moveToRightSiblingOrUncle(ncList, walkingStack)
@@ -40,19 +43,19 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
   }
 
   private def findLandingChild(ncList: NCList, backpack: Backpack[T]): Int = {
-    var nChildren = ncList.nChildren
+    val nChildren = ncList.nChildren
     if (nChildren == 0)
-      return -1;
+      return -1
 
-    var n = intBsearch(ncList.rgidBuf, nChildren, backpack.intervalList.toArray.map(_._1.end), backpack.processedInterval.start)
+    val n = intBsearch(ncList.rgidBuf, nChildren, backpack.intervalArr.map(_._1.end), backpack.processedInterval.start)
 
     if (n >= nChildren)
-      return -1;
+      return -1
 
     return n
   }
 
-  private def intBsearch(subset: Array[Int], subsetLen: Int, base: Array[Int], min: Int): Int = {
+  private def intBsearch(subset: Array[Int], subsetLen: Int, base: Array [Int], min: Int): Int = {
     /* Check first element. */
     var n1 = 0
     var b = base(subset(n1))
@@ -83,28 +86,27 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
     return n2
   }
 
-  private def moveToChild(parentNcList: NCList, n: Int, walkingStack: mutable.Stack[NCListWalkingStack]): NCList = {
+  private def moveToChild(parentNcList: NCList, n: Int, walkingStack: ArrayStack[NCListWalkingStack]): NCList = {
     walkingStack.push(NCListWalkingStack(parentNcList, n))
     parentNcList.childrenBuf(n)
   }
 
-  private def peekNCListWalkingStackElt(walkingStack: mutable.Stack[NCListWalkingStack]): NCListWalkingStack = {
+  private def peekNCListWalkingStackElt(walkingStack: ArrayStack[NCListWalkingStack]): NCListWalkingStack = {
     walkingStack.top
   }
 
-  private def moveToRightUncle(walkingStack: mutable.Stack[NCListWalkingStack]): NCList = {
-    var parentNcList = walkingStack.pop().parentNcList
+  private def moveToRightUncle(walkingStack: ArrayStack[NCListWalkingStack]): NCList = {
+    val parentNcList = walkingStack.pop().parentNcList
     if (walkingStack.isEmpty)
       return null
-    return moveToRightSiblingOrUncle(parentNcList, walkingStack)
+    moveToRightSiblingOrUncle(parentNcList, walkingStack)
   }
 
-  private def moveToRightSiblingOrUncle(ncList: NCList, walkingStack: mutable.Stack[NCListWalkingStack]): NCList = {
+  private def moveToRightSiblingOrUncle(ncList: NCList, walkingStack: ArrayStack[NCListWalkingStack]): NCList = {
     var ncListLocal = ncList
-    var stackEltPlusPlus: NCListWalkingStack = null
 
     do {
-      var stackElt = walkingStack.pop()
+      val stackElt = walkingStack.pop()
       if ((stackElt.n+1) < stackElt.parentNcList.nChildren) {
         walkingStack.push(NCListWalkingStack(stackElt.parentNcList,stackElt.n+1))
         ncListLocal = stackElt.parentNcList.childrenBuf(stackElt.n+1)
@@ -114,8 +116,8 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
         ncListLocal = stackElt.parentNcList
         walkingStack.pop()
       }
-    } while (!walkingStack.isEmpty)
-    return null
+    } while (walkingStack.nonEmpty)
+    null
   }
 
 }
