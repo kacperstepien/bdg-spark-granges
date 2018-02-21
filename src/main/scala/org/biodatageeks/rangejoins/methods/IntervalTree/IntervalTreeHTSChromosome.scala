@@ -1,7 +1,7 @@
 package org.biodatageeks.rangejoins.methods.IntervalTree
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.biodatageeks.rangejoins.IntervalTree.{IntervalTreeHTS, IntervalWithRow}
+import org.biodatageeks.rangejoins.IntervalTree.IntervalWithRow
 
 class IntervalTreeHTSChromosome(allRegions: List[(String,IntervalWithRow[Int])]) extends Serializable {
 
