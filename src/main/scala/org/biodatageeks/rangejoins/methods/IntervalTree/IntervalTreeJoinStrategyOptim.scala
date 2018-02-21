@@ -14,6 +14,8 @@ class IntervalTreeJoinStrategyOptim(spark: SparkSession) extends Strategy with S
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case ExtractRangeJoinKeys(joinType, rangeJoinKeys, left, right) =>
       IntervalTreeJoinOptim(planLater(left), planLater(right), rangeJoinKeys, spark,left,right) :: Nil
+    case ExtractRangeJoinKeysWithEquality(joinType, rangeJoinKeys, left, right) =>
+      IntervalTreeJoinOptimChromosome(planLater(left), planLater(right), rangeJoinKeys, spark,left,right) :: Nil
     case _ =>
       Nil
   }

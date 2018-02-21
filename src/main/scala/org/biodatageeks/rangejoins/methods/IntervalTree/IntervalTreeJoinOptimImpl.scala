@@ -114,6 +114,7 @@ object IntervalTreeJoinOptimImpl extends Serializable {
         .mapPartitions(p => {
           p.map(r => {
             IntervalTreeHTSLookup.time {
+
               val record =
                 intervalTree.value.overlappers(r.start, r.end)
               record

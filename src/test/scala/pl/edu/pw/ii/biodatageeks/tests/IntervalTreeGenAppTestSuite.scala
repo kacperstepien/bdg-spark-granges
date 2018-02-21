@@ -105,7 +105,7 @@ class IntervalTreeGenAppTestSuite extends FunSuite with DataFrameSuiteBase with 
           Row(400) ::
           Row(10000) ::
           Row(22100) ::
-          Nil),schema4).orderBy("start1"),
+          Nil),schema6).orderBy("start1"),
       sqlContext.sql(sqlQuery).orderBy("start1"))
   }
 
@@ -124,7 +124,7 @@ class IntervalTreeGenAppTestSuite extends FunSuite with DataFrameSuiteBase with 
           Row(400, 600, 500, 700) ::
           Row(10000, 20000, 15000, 15000) ::
           Row(22100, 22100, 22000, 22300) ::
-          Nil),schema3).orderBy("start1"),
+          Nil),schema5).orderBy("start1"),
       sqlContext.sql(sqlQuery).orderBy("start1"))
   }
 
@@ -143,7 +143,7 @@ class IntervalTreeGenAppTestSuite extends FunSuite with DataFrameSuiteBase with 
           Row(400) ::
           Row(10000) ::
           Row(22100) ::
-          Nil),schema4).orderBy("start1"),
+          Nil),schema6).orderBy("start1"),
       sqlContext.sql(sqlQuery).orderBy("start1"))
   }
 
@@ -162,7 +162,7 @@ class IntervalTreeGenAppTestSuite extends FunSuite with DataFrameSuiteBase with 
           Row(500, 700, 400, 600) ::
           Row(15000, 15000, 10000, 20000) ::
           Row(22000, 22300, 22100, 22100) ::
-          Nil),schema5).orderBy("start1"),
+          Nil),schema7).orderBy("start1"),
       sqlContext.sql(sqlQuery).orderBy("start1"))
   }
 
