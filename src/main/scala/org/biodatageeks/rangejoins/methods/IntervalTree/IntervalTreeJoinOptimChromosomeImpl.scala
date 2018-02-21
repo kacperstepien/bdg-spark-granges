@@ -24,6 +24,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.biodatageeks.rangejoins.IntervalTree.{Interval, IntervalWithRow}
 import org.biodatageeks.rangejoins.common.performance.timers.IntervalTreeTimer._
+import scala.collection.JavaConversions._
 
 object IntervalTreeJoinOptimChromosomeImpl extends Serializable {
 
@@ -45,7 +46,6 @@ object IntervalTreeJoinOptimChromosomeImpl extends Serializable {
 
 
 
-
     val localIntervals =
       rdd1
         .instrument()
@@ -60,11 +60,12 @@ object IntervalTreeJoinOptimChromosomeImpl extends Serializable {
         p.map(r => {
           IntervalTreeHTSLookup.time {
             val record =
-              intervalTree.value.getIntervalTreeByChromosome(r._1).overlappers(r._2.start,r._2.end)
-
+              intervalTree.value.getIntervalTreeByChromosome(r._1)
+                .overlappers(r._2.start,r._2.end)
             record
               .toIterator
-             .map(k => (k.getValue, r.row))
+             .map(k => (k.getValue, r._2.row
+             ))
           }
         })
       })

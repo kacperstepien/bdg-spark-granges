@@ -5,14 +5,14 @@ import org.biodatageeks.rangejoins.IntervalTree.{IntervalTreeHTS, IntervalWithRo
 
 class IntervalTreeHTSChromosome(allRegions: List[(String,IntervalWithRow[Int])]) extends Serializable {
 
-  val intervalTreeHashMap:Map[String,IntervalTreeHTS[InternalRow]] = allRegions.groupBy(_._1).map(x => {
-    val it = new IntervalTreeHTS[InternalRow]()
-    x._2.map(y => it.put(y._2.start,y._2.end,y._2.row))
-    (x._1, it)
+  val intervalTreeHashMap:Map[String,IntervalTreeHTS[InternalRow]] = allRegions
+    .groupBy(_._1)
+    .map(x => {
+      val it = new IntervalTreeHTS[InternalRow]()
+      x._2.map(y => it.put(y._2.start,y._2.end,y._2.row))
+      (x._1, it)
   })
 
-  def getIntervalTreeByChromosome(chr:String): IntervalTreeHTS[InternalRow] = {
+  def getIntervalTreeByChromosome(chr:String): IntervalTreeHTS[InternalRow] = intervalTreeHashMap(chr)
 
-    return intervalTreeHashMap(chr)
-  }
 }
