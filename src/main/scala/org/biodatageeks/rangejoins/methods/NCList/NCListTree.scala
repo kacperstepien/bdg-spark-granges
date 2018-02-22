@@ -1,21 +1,20 @@
 package org.biodatageeks.rangejoins.NCList
 
+import rangejoins.methods.NCList.NCListWalkingStack
 
-import scala.collection.mutable.ArrayStack
+import scala.collection.mutable.{ArrayBuffer, ArrayStack}
 import scala.util.control.Breaks._
 
-class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
+class NCListTree[T](allRegions: Array[(Interval[Int], T)]) extends Serializable {
 
   val ncList = NCListBuilder.build(allRegions)
 
   def getAllOverlappings(processedInterval: Interval[Int]) = allOverlappingRegions(processedInterval, ncList, allRegions)
 
-  private def allOverlappingRegions(processedInterval: Interval[Int], topNcList: NCList, intervalList: List[(Interval[Int],T)]): List[(Interval[Int], T)] = {
-    val intervalArray = intervalList.toArray
-    val backpack = Backpack(intervalArray, processedInterval)
+  private def allOverlappingRegions(processedInterval: Interval[Int], topNcList: NCList, intervalArray: Array[(Interval[Int],T)]): List[(Interval[Int], T)] = {
+    val backpack = Backpack(intervalArray,processedInterval)
     var resultList = List[(Interval[Int], T)]()
     val walkingStack = ArrayStack[NCListWalkingStack]()
-    walkingStack.clear()
 
     var n = findLandingChild(topNcList, backpack)
     if (n < 0)
@@ -26,13 +25,14 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
       val stackElt = peekNCListWalkingStackElt(walkingStack)
       val rgid = stackElt.parentNcList.rgidBuf(stackElt.n)
       breakable {
-        if (backpack.intervalArr(rgid)._1.start > backpack.processedInterval.end) {
+        val candidateInterval = intervalArray(rgid)
+        if (candidateInterval._1.start > backpack.processedInterval.end) {
           /* Skip all further siblings of 'nclist'. */
           ncList = moveToRightUncle(walkingStack)
           break //continue
         }
 
-        resultList :+= intervalArray(rgid)
+        resultList :+= candidateInterval
         n = findLandingChild(ncList, backpack)
         /* Skip first 'n' or all children of 'nclist'. */
         ncList = if (n >= 0) moveToChild(ncList, n, walkingStack) else moveToRightSiblingOrUncle(ncList, walkingStack)
@@ -46,7 +46,7 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
     if (nChildren == 0)
       return -1
 
-    val n = intBsearch(ncList.rgidBuf, nChildren, backpack.intervalArr.map(_._1.end), backpack.processedInterval.start)
+    val n = intBsearch(ncList.rgidBuf, nChildren, backpack.intervalArray, backpack.processedInterval.start)
 
     if (n >= nChildren)
       return -1
@@ -54,16 +54,16 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
     return n
   }
 
-  private def intBsearch(subset: Array[Int], subsetLen: Int, base: Array [Int], min: Int): Int = {
+  private def intBsearch(subset: ArrayBuffer[Int], subsetLen: Int, base: Array[(Interval[Int],T)], min: Int): Int = {
     /* Check first element. */
     var n1 = 0
-    var b = base(subset(n1))
+    var b = base(subset(n1))._1.end
     if (b >= min)
       return n1
 
     /* Check last element. */
     var n2 = subsetLen - 1
-    b = base(subset(n2))
+    b = base(subset(n2))._1.end
     if (b < min)
       return subsetLen
     if (b == min)
@@ -72,7 +72,7 @@ class NCListTree[T](allRegions: List[(Interval[Int], T)]) extends Serializable {
     /* Binary search.*/
     var n = (n1 + n2) / 2
     while (n != n1) {
-      b = base(subset(n))
+      b = base(subset(n))._1.end
       if (b == min)
         return n
       if (b < min)
