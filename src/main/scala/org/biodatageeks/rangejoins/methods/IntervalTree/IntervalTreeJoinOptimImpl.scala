@@ -38,13 +38,12 @@ object IntervalTreeJoinOptimImpl extends Serializable {
   val logger =  Logger.getLogger(this.getClass.getCanonicalName)
 
   /**
-    * Multi-joins together two RDDs that contain objects that map to reference regions.
-    * The elements from the first RDD become the key of the output RDD, and the value
-    * contains all elements from the second RDD which overlap the region of the key.
-    * This is a multi-join, so it preserves n-to-m relationships between regions.
     *
-    * @param sc A spark context from the cluster that will perform the join
-    * @param rdd1 RDD of values on which we build an interval tree. Assume |rdd1| < |rdd2|
+    * @param sc
+    * @param rdd1
+    * @param rdd2
+    * @param rdd1Count
+    * @return
     */
   def overlapJoin(sc: SparkContext,
                   rdd1: RDD[(IntervalWithRow[Int])],
@@ -62,11 +61,12 @@ object IntervalTreeJoinOptimImpl extends Serializable {
     sc.setLogLevel("WARN")
     logger.warn(optimizer.debugInfo )
 
-    if (optimizer.getRangeJoinMethod == RangeJoinMethod.JointWithRowBroadcast) {
+    if (optimizer.getRangeJoinMethod == RangeJoinMethod.JoinWithRowBroadcast) {
 
       val localIntervals =
         rdd1
         .instrument()
+        .map(r=>IntervalWithRow(r.start,r.end,r.row.copy()) )
         .collect()
       val intervalTree = IntervalTreeHTSBuild.time {
         val tree = new IntervalTreeHTS[InternalRow]()
@@ -82,8 +82,7 @@ object IntervalTreeJoinOptimImpl extends Serializable {
               val record =
                 intervalTree.value.overlappers(r.start, r.end)
               record
-                .toIterator
-                .map(k => (k.getValue, r.row))
+                .flatMap(k => (k.getValue.map(s=>(s,r.row))) )
             }
           })
         })
@@ -118,8 +117,7 @@ object IntervalTreeJoinOptimImpl extends Serializable {
               val record =
                 intervalTree.value.overlappers(r.start, r.end)
               record
-                .toIterator
-                .map(k => (k.getValue,Iterable(r.row)))
+                .flatMap(k => (k.getValue.map(s=>(s,Iterable(r.row)))) )
             }
           })
         })

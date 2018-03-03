@@ -4,19 +4,15 @@ import jdk.nashorn.internal.ir.debug.ObjectSizeCalculator
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.util.SizeEstimator
 import org.biodatageeks.rangejoins.IntervalTree.{Interval, IntervalWithRow}
 import org.biodatageeks.rangejoins.optimizer.RangeJoinMethod.RangeJoinMethod
 
 
-class JoinOptimizerChromosome(sc: SparkContext, rdd: RDD[(String,Interval[Int],InternalRow)], rddCount : Long) {
+class JoinOptimizerChromosome(sc: SparkContext, rdd: RDD[(String,Interval[Int],InternalRow)], rddCount : Long, maxBroadcastSize : Int) {
 
-  val maxBroadcastSize = sc
-    .getConf
-    .getOption("spark.biodatageeks.rangejoin.maxBroadcastSize") match {
-      case Some(size) => size.toLong
-      case _ =>  10*(1024*1024) //defaults to 10Mb
-    }
+
    val estBroadcastSize = estimateBroadcastSize(rdd,rddCount)
 
 
@@ -45,7 +41,7 @@ class JoinOptimizerChromosome(sc: SparkContext, rdd: RDD[(String,Interval[Int],I
   def getRangeJoinMethod : RangeJoinMethod ={
 
     if (estimateBroadcastSize(rdd, rddCount) <= maxBroadcastSize)
-      RangeJoinMethod.JointWithRowBroadcast
+      RangeJoinMethod.JoinWithRowBroadcast
     else
       RangeJoinMethod.TwoPhaseJoin
 
