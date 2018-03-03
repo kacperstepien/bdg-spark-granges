@@ -1,6 +1,5 @@
 package org.biodatageeks.rangejoins.NCList
 
-import rangejoins.methods.NCList.NCListWalkingStack
 
 import scala.collection.mutable.{ArrayBuffer, ArrayStack}
 import scala.util.control.Breaks._
