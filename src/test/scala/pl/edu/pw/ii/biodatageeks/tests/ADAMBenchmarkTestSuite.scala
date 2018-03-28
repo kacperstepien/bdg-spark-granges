@@ -1,10 +1,11 @@
 package pl.edu.pw.ii.biodatageeks.tests
-import java.io.{OutputStreamWriter, PrintWriter}
 
+import java.io.{OutputStreamWriter, PrintWriter}
 import org.bdgenomics.adam.rdd.ADAMContext._
 import com.holdenkarau.spark.testing.{DataFrameSuiteBase, SharedSparkContext}
 import org.bdgenomics.utils.instrumentation.{Metrics, MetricsListener, RecordedMetrics}
 import org.biodatageeks.rangejoins.IntervalTree.IntervalTreeJoinStrategyOptim
+import org.biodatageeks.rangejoins.NCList.NCListsJoinStrategy
 import org.biodatageeks.rangejoins.genApp.IntervalTreeJoinStrategy
 import org.scalatest.{BeforeAndAfter, FunSuite}
 
@@ -27,7 +28,7 @@ class ADAMBenchmarkTestSuite extends FunSuite with DataFrameSuiteBase with Befor
        |CAST(snp.start AS INTEGER)<=CAST(ref.end AS INTEGER)
        |)
        |
-       """.stripMargin)
+       """).stripMargin
 
   val metricsListener = new MetricsListener(new RecordedMetrics())
   val writer = new PrintWriter(new OutputStreamWriter(System.out))
@@ -36,12 +37,14 @@ class ADAMBenchmarkTestSuite extends FunSuite with DataFrameSuiteBase with Befor
     System.setSecurityManager(null)
     //spark.sparkContext.setLogLevel("INFO")
     spark.experimental.extraStrategies = new IntervalTreeJoinStrategyOptim(spark) :: Nil
-    sqlContext.setConf("spark.biodatageeks.rangejoin.maxBroadcastSize", (100 *1024*1024).toString)
+    spark.sqlContext.setConf("spark.biodatageeks.rangejoin.maxBroadcastSize", (5*1024*1024).toString)
     val ref = spark.read.parquet(getClass.getResource("/refFlat.adam").getPath)
     ref.createOrReplaceTempView("ref")
+    time(println(ref.count))
 
     val snp = spark.read.parquet(getClass.getResource("/snp150Flagged.adam").getPath)
     snp.createOrReplaceTempView("snp")
+    time(println(snp.count))
 
     Metrics.initialize(sc)
 
@@ -52,14 +55,31 @@ class ADAMBenchmarkTestSuite extends FunSuite with DataFrameSuiteBase with Befor
 
   test ("Join using bgd-spark-granges - broadcast"){
 
+    val stageMetrics = ch.cern.sparkmeasure.StageMetrics(spark)
+
     spark.experimental.extraStrategies = new IntervalTreeJoinStrategyOptim(spark) :: Nil
-    time(assert(spark.sqlContext.sql(query).count === 616404L))
+    time(assert(stageMetrics.runAndMeasure(spark.sqlContext.sql(query).count) === 616404L))
+
   }
 
   test ("Join using bgd-spark-granges - twophase"){
-
+    val stageMetrics = ch.cern.sparkmeasure.StageMetrics(spark)
     spark.experimental.extraStrategies = new IntervalTreeJoinStrategyOptim(spark) :: Nil
     sqlContext.setConf("spark.biodatageeks.rangejoin.maxBroadcastSize", (1024*1024).toString)
+    time(assert(stageMetrics.runAndMeasure(spark.sqlContext.sql(query).count) === 616404L))
+    val a = stageMetrics.createStageMetricsDF()
+    val b= a
+      .drop("jobId","stageId","name","submissionTime", "completionTime")
+      .groupBy()
+      .sum()
+
+
+    b.select("sum(executorRunTime)","sum(executorCpuTime)","sum(shuffleTotalBytesRead)","sum(shuffleBytesWritten)")
+      .show(100,false)
+  }
+
+  test ("Join using bgd-spark-granges NCList"){
+    spark.experimental.extraStrategies = new NCListsJoinStrategy(spark) :: Nil
     time(assert(spark.sqlContext.sql(query).count === 616404L))
   }
 
@@ -74,13 +94,15 @@ class ADAMBenchmarkTestSuite extends FunSuite with DataFrameSuiteBase with Befor
     spark.experimental.extraStrategies =  new IntervalTreeJoinStrategy(spark) :: Nil
     time(assert(spark.sqlContext.sql(query).count === 616404L))
   }
-
+//
 //  test("Join using ADAM broadcast join"){
 //
 //    val featuresRef = sc.loadFeatures(getClass.getResource("/refFlat.adam").getPath)
 //    val featuresSnp = sc.loadFeatures (getClass.getResource("/snp150Flagged.adam").getPath)
+//    val stageMetrics = ch.cern.sparkmeasure.StageMetrics(spark)
 //    val res = featuresRef.broadcastRegionJoin(featuresSnp)
-//    time(println(res.rdd.count()))
+//    time(println(stageMetrics.runAndMeasure(res.rdd.count() ) ) )
+//    //time(println(res.rdd.count()))
 //  }
 //
 //  test("Join using ADAM shuffle join"){
