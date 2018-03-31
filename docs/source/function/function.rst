@@ -117,8 +117,59 @@ calcOverlap function returns the width of overlap between intervals. To use the 
        |
          """.stripMargin
 
+flank
+*******
 
+Flank function is performing operation of calculating the flanking range with specified width. First boolean argument indicates whether flanking should be performed from start of range (true) or end (false). 
+Second boolean argument set to true indicates that flanking range should contain not only outside of original range, but also inside. In that case width of flanking range is doubled. Sample query using flank function:
 
+::
+
+   spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+   val query =
+     s"""
+       |SELECT chr,start,end,
+	   |flank(start,end,5,true,false)._1 as start_2,
+	   |flank(start,end,5,true,false)._2 as end_2 
+	   |FROM ref LIMIT 1
+	""".stripMargin
+   
+promoters
+*******
+
+Promoters function is performing operation of calculating promoter for the range with given upstream and downstream. Sample query using promoters function:
+
+::
+
+    spark.sqlContext.udf.register("promoters", RangeMethods.promoters _)
+
+    val query =
+      s"""
+        |SELECT chr,start,end,
+		|promoters(start,end,100,20)._1 as start_2,
+		|promoters(start,end,100,20)._2 as end_2 
+		|FROM ref LIMIT 1
+      """.stripMargin
+
+reflect
+*******
+
+Reflect function is performing operation of reversing the range relative to specified reference bounds. Sample query using reflect function:
+
+::
+
+    spark.sqlContext.udf.register("reflect", RangeMethods.reflect _)
+
+    val query =
+      s"""
+        |SELECT chr,start,end,
+		|reflect(start,end,11000,15000)._1 as start_2,
+		|reflect(start,end,11000,15000)._2 as end_2 
+		|FROM ref LIMIT 1
+      """.stripMargin 
+   
+   
 Additional parameteres
 ######################
 
