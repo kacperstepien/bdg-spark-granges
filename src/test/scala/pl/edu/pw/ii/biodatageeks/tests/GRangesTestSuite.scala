@@ -215,5 +215,104 @@ class GRangesTestSuite extends FunSuite with DataFrameSuiteBase with BeforeAndAf
     assert(spark.sql(query).select("start_2").first().get(0) === 11868 && spark.sql(query).select("end_2").first().get(0) === 14409)
   }
 
+  test( "Basic operation - flank - flankWidth positive, startFlank=true, both=false"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
 
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,5,true,false)._1 as start_2,flank(start,end,5,true,false)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 11868 && spark.sql(query).select("end_2").first().get(0) === 11872)
+  }
+
+  test( "Basic operation - flank - flankWidth positive, startFlank=false, both=false"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,5,false,false)._1 as start_2,flank(start,end,5,false,false)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 14410 && spark.sql(query).select("end_2").first().get(0) === 14414)
+  }
+
+  test( "Basic operation - flank - flankWidth positive, startFlank=true, both=true"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,5,true,true)._1 as start_2,flank(start,end,5,true,true)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 11868 && spark.sql(query).select("end_2").first().get(0) === 11877)
+  }
+
+  test( "Basic operation - flank - flankWidth positive, startFlank=false, both=true"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,5,false,true)._1 as start_2,flank(start,end,5,false,true)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 14405 && spark.sql(query).select("end_2").first().get(0) === 14414)
+  }
+
+  test( "Basic operation - flank - flankWidth negative, startFlank=true, both=false"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,-5,true,false)._1 as start_2,flank(start,end,-5,true,false)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 11873 && spark.sql(query).select("end_2").first().get(0) === 11877)
+  }
+
+  test( "Basic operation - flank - flankWidth negative, startFlank=false, both=false"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,-5,false,false)._1 as start_2,flank(start,end,-5,false,false)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 14405 && spark.sql(query).select("end_2").first().get(0) === 14409)
+  }
+
+  test( "Basic operation - flank - flankWidth negative, startFlank=true, both=true"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,5,true,true)._1 as start_2,flank(start,end,5,true,true)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 11868 && spark.sql(query).select("end_2").first().get(0) === 11877)
+  }
+
+  test( "Basic operation - flank - flankWidth negative, startFlank=false, both=true"){
+    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      """
+        |SELECT chr,start,end,flank(start,end,-5,false,true)._1 as start_2,flank(start,end,-5,false,true)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 14405 && spark.sql(query).select("end_2").first().get(0) === 14414)
+  }
+
+  test( "Basic operation - promoters"){
+    spark.sqlContext.udf.register("promoters", RangeMethods.promoters _)
+
+    val query =
+      """
+        |SELECT chr,start,end,promoters(start,end,100,20)._1 as start_2,promoters(start,end,100,20)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+    assert(spark.sql(query).select("start_2").first().get(0) === 11773 && spark.sql(query).select("end_2").first().get(0) === 11892)
+  }
+
+  test( "Basic operation - reflect"){
+    spark.sqlContext.udf.register("reflect", RangeMethods.reflect _)
+
+    val query =
+      """
+        |SELECT chr,start,end,reflect(start,end,11000,15000)._1 as start_2,reflect(start,end,11000,15000)._2 as end_2 FROM ref LIMIT 1
+      """.stripMargin
+
+    assert(spark.sql(query).select("start_2").first().get(0) === 11591 && spark.sql(query).select("end_2").first().get(0) === 14127 )
+  }
 }
