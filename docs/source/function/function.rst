@@ -62,20 +62,19 @@ shift
 ******
 
 Shift function is performing operation of shifting the ranges by a specified number of positions.
-To use the function within query it needs to be registered. Sample query using shift function:
+It returns range with start and end fields. To use the function within query it needs to be registered. Sample query using shift function:
 
 ::
 
    spark.sqlContext.udf.register("shift", RangeMethods.shift _)
 
-   val query =
+    val query =
      s"""
-      |SELECT chr,start,end,
-      |shift(start,5) as start_2 ,
-      |shift(end,5) as end_2 
-      |FROM ref LIMIT 1
-    """.stripMargin
-
+       |SELECT 
+       |a.shiftedInterval.start as start_2,
+       |a.shiftedInterval.end as end_2 
+       |FROM (SELECT chr,start,end,shift(start,end,5) as shiftedInterval FROM ref LIMIT 1) a
+      """.stripMargin
 
 resize
 *******
@@ -86,13 +85,13 @@ Resize function is performing operation of extending the range by specified widt
 
    spark.sqlContext.udf.register("resize", RangeMethods.resize _)
 
-   val query =
-      s"""
-        |SELECT chr,start,end,
-        |resize(start,end,5,"center")._1 as start_2,
-        |resize(start,end,5,"center")._2 as end_2 
-        |FROM ref LIMIT 1
-   """.stripMargin
+    val query =
+     s"""
+        |SELECT 
+        |a.resizedInterval.start as start_2,
+        |a.resizedInterval.end as end_2 
+        |FROM (SELECT chr,start,end,resize(start,end,5,"center") as resizedInterval FROM ref LIMIT 1) a
+      """.stripMargin
 
 calcOverlap
 ************
@@ -127,13 +126,13 @@ Second boolean argument set to true indicates that flanking range should contain
 
    spark.sqlContext.udf.register("flank", RangeMethods.flank _)
 
-   val query =
-     s"""
-       |SELECT chr,start,end,
-	   |flank(start,end,5,true,false)._1 as start_2,
-	   |flank(start,end,5,true,false)._2 as end_2 
-	   |FROM ref LIMIT 1
-	""".stripMargin
+    val query =
+      s"""
+        |SELECT 
+        |a.flankedInterval.start as start_2,
+        |a.flankedInterval.end as end_2 
+        |FROM (SELECT chr,start,end,flank(start,end,5,true,true) as flankedInterval FROM ref LIMIT 1) a
+       """.stripMargin
    
 promoters
 *******
@@ -146,11 +145,11 @@ Promoters function is performing operation of calculating promoter for the range
 
     val query =
       s"""
-        |SELECT chr,start,end,
-		|promoters(start,end,100,20)._1 as start_2,
-		|promoters(start,end,100,20)._2 as end_2 
-		|FROM ref LIMIT 1
-      """.stripMargin
+        |SELECT 
+        |a.promoterInterval.start as start_2,
+        |a.promoterInterval.end as end_2 
+        |FROM (SELECT chr, start, end, promoters(start,end,100,20) as promoterInterval FROM ref LIMIT 1) a
+       """.stripMargin
 
 reflect
 *******
@@ -163,11 +162,11 @@ Reflect function is performing operation of reversing the range relative to spec
 
     val query =
       s"""
-        |SELECT chr,start,end,
-		|reflect(start,end,11000,15000)._1 as start_2,
-		|reflect(start,end,11000,15000)._2 as end_2 
-		|FROM ref LIMIT 1
-      """.stripMargin 
+        |SELECT 
+        |a.reflectedInterval.start as start_2,
+        |a.reflectedInterval.end as end_2 
+        |FROM (SELECT chr, start, end, reflect(start,end,11000,15000) as reflectedInterval FROM ref LIMIT 1) a
+       """.stripMargin 
    
    
 Additional parameteres

@@ -4,13 +4,14 @@ object RangeMethods {
 
   /**
     *
-    * @param value
+    * @param start
+    * @param end
     * @param shift
     * @return
     */
-  def shift(value: Int, shift: Int) :Int= {
+  def shift(start: Int, end: Int, shift: Int) :Interval= {
 
-    value + shift
+    Interval (start+shift, end+shift)
   }
 
   /**
@@ -21,13 +22,13 @@ object RangeMethods {
     * @param fix
     * @return
     */
-  def resize(start:Int, end: Int, shift: Int, fix:String ): (Int,Int) = fix.toLowerCase match {
-    case "start" => (start, end + shift)
-    case "end" => (start - shift, end)
+  def resize(start:Int, end: Int, shift: Int, fix:String ): Interval = fix.toLowerCase match {
+    case "start" => Interval (start, end + shift)
+    case "end" => Interval (start - shift, end)
     case _ => {
       val  width = end - start
       val center = start + width/2
-      (center - (width/2 +(if (shift % 2 == 0) shift/2 else shift/2 + 1)) , center + (width/2 + (if (shift % 2 == 0) shift/2 else shift/2) ) )
+      Interval (center - (width/2 +(if (shift % 2 == 0) shift/2 else shift/2 + 1)) , center + (width/2 + (if (shift % 2 == 0) shift/2 else shift/2) ) )
     }
   }
 
@@ -50,11 +51,11 @@ object RangeMethods {
     * @param both
     * @return
     */
-  def flank(start: Int, end: Int, flankWidth: Int, startFlank: Boolean, both: Boolean): (Int, Int) = {
+  def flank(start: Int, end: Int, flankWidth: Int, startFlank: Boolean, both: Boolean): Interval = {
     if (both) {
       val width = Math.abs(flankWidth)
       val newStart = if (startFlank) (start - width) else (end - width + 1)
-      (newStart, newStart + 2 * width - 1)
+      Interval (newStart, newStart + 2 * width - 1)
     } else {
       val newStart = (startFlank, flankWidth >= 0) match {
         case (true, true) => start - flankWidth
@@ -63,7 +64,7 @@ object RangeMethods {
         case (false, false) => end + flankWidth + 1
       }
       val width = Math.abs(flankWidth)
-      (newStart, newStart + width - 1)
+      Interval (newStart, newStart + width - 1)
     }
   }
 
@@ -75,9 +76,9 @@ object RangeMethods {
     * @param downstream
     * @return
     */
-  def promoters(start:Int, end: Int, upstream: Int, downstream: Int): (Int,Int) = {
+  def promoters(start:Int, end: Int, upstream: Int, downstream: Int): Interval = {
     if (upstream >=0 && downstream >= 0) {
-      (start - upstream, start + downstream - 1)
+     Interval(start - upstream, start + downstream - 1)
     }
     else {
       throw new Exception("Upstream and downstream must be >= 0")
@@ -92,8 +93,10 @@ object RangeMethods {
     * @param boundEnd
     * @return
     */
-  def reflect(start:Int, end: Int, boundStart: Int, boundEnd: Int): (Int,Int) = {
+  def reflect(start:Int, end: Int, boundStart: Int, boundEnd: Int): Interval = {
     val newStart = (2 * boundStart + boundEnd-boundStart) - end
-    (newStart, newStart+end-start)
+    Interval(newStart, newStart+end-start)
   }
+
+  case class Interval(start: Int, end: Int)
 }
