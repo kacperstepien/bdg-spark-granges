@@ -61,8 +61,7 @@ SeQuiLa introduces several UserDefinedFunctions.
 shift
 ******
 
-Shift function is performing operation of shifting the ranges by a specified number of positions.
-It returns range with start and end fields. To use the function within query it needs to be registered. Sample query using shift function:
+Shift function is performing operation of shifting the ranges by a specified number of positions. To use the function within query it needs to be registered. Sample query using shift function:
 
 ::
 
@@ -70,16 +69,26 @@ It returns range with start and end fields. To use the function within query it 
 
     val query =
      s"""
-       |SELECT 
-       |a.shiftedInterval.start as start_2,
-       |a.shiftedInterval.end as end_2 
-       |FROM (SELECT chr,start,end,shift(start,end,5) as shiftedInterval FROM ref LIMIT 1) a
+       |SELECT start, end, shift(start,end,5) as shiftedInterval FROM ref
       """.stripMargin
 
+It returns range with start and end fields.
+
+.. highlight:: console
+
+::
+
+    |-- start: integer (nullable = true)
+    |-- end: integer (nullable = true)
+    |-- shiftedInterval: struct (nullable = true)
+    |    |-- start: integer (nullable = false)
+    |    |-- end: integer (nullable = false)
+
+.. highlight:: r
 resize
 *******
 
-Resize function is performing operation of extending the range by specified width. Sample query using resize function:
+Resize function is performing operation of extending the range by specified width. It returns range with start and end fields. Sample query using resize function:
 
 ::
 
@@ -87,10 +96,7 @@ Resize function is performing operation of extending the range by specified widt
 
     val query =
      s"""
-        |SELECT 
-        |a.resizedInterval.start as start_2,
-        |a.resizedInterval.end as end_2 
-        |FROM (SELECT chr,start,end,resize(start,end,5,"center") as resizedInterval FROM ref LIMIT 1) a
+        |SELECT start, end, resize(start,end,5,"center") as resizedInterval FROM ref
       """.stripMargin
 
 calcOverlap
@@ -120,7 +126,7 @@ flank
 *******
 
 Flank function is performing operation of calculating the flanking range with specified width. First boolean argument indicates whether flanking should be performed from start of range (true) or end (false). 
-Second boolean argument set to true indicates that flanking range should contain not only outside of original range, but also inside. In that case width of flanking range is doubled. Sample query using flank function:
+Second boolean argument set to true indicates that flanking range should contain not only outside of original range, but also inside. In that case width of flanking range is doubled. Flank function returns range with start and end fields. Sample query using flank function:
 
 ::
 
@@ -128,16 +134,13 @@ Second boolean argument set to true indicates that flanking range should contain
 
     val query =
       s"""
-        |SELECT 
-        |a.flankedInterval.start as start_2,
-        |a.flankedInterval.end as end_2 
-        |FROM (SELECT chr,start,end,flank(start,end,5,true,true) as flankedInterval FROM ref LIMIT 1) a
+        |SELECT start, end, flank(start,end,5,true,true) as flankedInterval FROM ref
        """.stripMargin
    
 promoters
-*******
+*********
 
-Promoters function is performing operation of calculating promoter for the range with given upstream and downstream. Sample query using promoters function:
+Promoters function is performing operation of calculating promoter for the range with given upstream and downstream. It returns range with start and end fields. Sample query using promoters function:
 
 ::
 
@@ -145,16 +148,13 @@ Promoters function is performing operation of calculating promoter for the range
 
     val query =
       s"""
-        |SELECT 
-        |a.promoterInterval.start as start_2,
-        |a.promoterInterval.end as end_2 
-        |FROM (SELECT chr, start, end, promoters(start,end,100,20) as promoterInterval FROM ref LIMIT 1) a
+        |SELECT start, end, promoters(start,end,100,20) as promoterInterval FROM ref
        """.stripMargin
 
 reflect
 *******
 
-Reflect function is performing operation of reversing the range relative to specified reference bounds. Sample query using reflect function:
+Reflect function is performing operation of reversing the range relative to specified reference bounds. It returns range with start and end fields. Sample query using reflect function:
 
 ::
 
@@ -162,10 +162,7 @@ Reflect function is performing operation of reversing the range relative to spec
 
     val query =
       s"""
-        |SELECT 
-        |a.reflectedInterval.start as start_2,
-        |a.reflectedInterval.end as end_2 
-        |FROM (SELECT chr, start, end, reflect(start,end,11000,15000) as reflectedInterval FROM ref LIMIT 1) a
+        |SELECT start, end, reflect(start,end,11000,15000) as reflectedInterval FROM ref
        """.stripMargin 
    
    
