@@ -1,8 +1,8 @@
 import scala.util.Properties
 
-name := """bdg-spark-granges"""
+name := """bdg-sequila"""
 
-version := "0.1-SNAPSHOT"
+version := "0.3-SNAPSHOT"
 
 organization := "org.biodatageeks"
 
@@ -30,11 +30,17 @@ libraryDependencies += "org.bdgenomics.adam" %% "adam-apis-spark2" % "0.22.0"
 libraryDependencies += "org.bdgenomics.adam" %% "adam-cli-spark2" % "0.22.0"
 libraryDependencies += "org.bdgenomics.utils" %% "utils-misc-spark2" % "0.2.10"
 libraryDependencies += "org.scala-lang" % "scala-library" % "2.11.8"
+libraryDependencies += "org.rogach" %% "scallop" % "3.1.2"
 
 
 libraryDependencies += "org.hammerlab.bdg-utils" %% "cli" % "0.3.0"
 
 libraryDependencies += "com.github.samtools" % "htsjdk" % "2.14.1"
+
+
+libraryDependencies += "com.github.potix2" %% "spark-google-spreadsheets" % "0.5.0"
+
+libraryDependencies += "ch.cern.sparkmeasure" %% "spark-measure" % "0.11"
 
 //fork := true
 fork in Test := true
@@ -44,7 +50,7 @@ javaOptions in run ++= Seq(
   "-Dlog4j.debug=true",
   "-Dlog4j.configuration=log4j.properties")
 
-javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:+CMSClassUnloadingEnabled")
+javaOptions ++= Seq("-Xms512M", "-Xmx8192M", "-XX:+CMSClassUnloadingEnabled")
 
 updateOptions := updateOptions.value.withLatestSnapshots(false)
 
@@ -58,7 +64,6 @@ resolvers ++= Seq(
   "Cloudera" at "https://repository.cloudera.com/content/repositories/releases/"
 )
 
-parallelExecution in Test := false
 
 assemblyMergeStrategy in assembly := {
   case PathList("org", "apache", xs@_*) => MergeStrategy.first
@@ -87,6 +92,12 @@ assemblyMergeStrategy in assembly := {
     oldStrategy(x)
 }
 
+/* only for releasing assemblies*/
+//artifact in (Compile, assembly) := {
+//  val art = (artifact in (Compile, assembly)).value
+//  art.withClassifier(Some("assembly"))
+//}
+//addArtifact(artifact in (Compile, assembly), assembly)
 
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
