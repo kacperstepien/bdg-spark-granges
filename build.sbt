@@ -40,7 +40,7 @@ libraryDependencies += "com.github.samtools" % "htsjdk" % "2.14.1"
 
 libraryDependencies += "com.github.potix2" %% "spark-google-spreadsheets" % "0.5.0"
 
-libraryDependencies += "ch.cern.sparkmeasure" %% "spark-measure" % "0.11"
+libraryDependencies ++= Seq("org.scalanlp" %% "breeze" % "0.13.2", "ch.cern.sparkmeasure" %% "spark-measure" % "0.11")
 
 //fork := true
 fork in Test := true
