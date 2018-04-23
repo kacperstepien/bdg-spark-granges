@@ -130,12 +130,21 @@ node {
           stage('Readthedocs') {
 
              echo 'Generating readthedocs....'
-             sh "cd docs && make html"
+             sh 'cd docs && ./docs.sh' 
              publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'docs/build/html/', reportFiles: 'index.html', reportName: 'Readthedocs', reportTitles: ''])
              sh "cd docs && docker build -t zsi-bio/bdg-sequila-doc ."
              sh 'if [ $(docker ps | grep bdg-sequila-doc | wc -l) -gt 0 ]; then docker stop bdg-sequila-doc && docker rm bdg-sequila-doc; fi'
              sh "docker run -d --name bdg-sequila-doc zsi-bio/bdg-sequila-doc"
           }
+
+           stage('Building Docker images') {
+
+                     echo 'Building Docker images....'
+                     sh './build.sh'
+
+                     }
+
+
 
 
  }

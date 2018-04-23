@@ -49,9 +49,13 @@ If your dataset contains chromosomes information as well you may want to add add
         |FROM s1 JOIN s2 
         |ON (s1.chr=s2.chr and s1.end>=s2.start and s1.start<=s2.end )
         """
-     val res = spark.sql(query)   
+     val res = spark.sql(query)
 
 
+Using builtin data sources for BAM and ADAM file formats
+########################################################
+
+<TODO describe BAM/ADAM data source and creating tables>
 
 Using UDFs
 ##########
@@ -61,38 +65,44 @@ SeQuiLa introduces several UserDefinedFunctions.
 shift
 ******
 
-Shift function is performing operation of shifting the ranges by a specified number of positions.
-To use the function within query it needs to be registered. Sample query using shift function:
+Shift function is performing operation of shifting the ranges by a specified number of positions. To use the function within query it needs to be registered. Sample query using shift function:
 
 ::
 
    spark.sqlContext.udf.register("shift", RangeMethods.shift _)
 
-   val query =
+    val query =
      s"""
-      |SELECT chr,start,end,
-      |shift(start,5) as start_2 ,
-      |shift(end,5) as end_2 
-      |FROM ref LIMIT 1
-    """.stripMargin
+       |SELECT start, end, shift(start,end,5) as shiftedInterval FROM ref
+      """.stripMargin
 
+It returns range with start and end fields.
+
+.. highlight:: console
+
+::
+
+    |-- start: integer (nullable = true)
+    |-- end: integer (nullable = true)
+    |-- shiftedInterval: struct (nullable = true)
+    |    |-- start: integer (nullable = false)
+    |    |-- end: integer (nullable = false)
+
+.. highlight:: console
 
 resize
 *******
 
-Resize function is performing operation of extending the range by specified width. Sample query using resize function:
+Resize function is performing operation of extending the range by specified width. It returns range with start and end fields. Sample query using resize function:
 
 ::
 
    spark.sqlContext.udf.register("resize", RangeMethods.resize _)
 
-   val query =
-      s"""
-        |SELECT chr,start,end,
-        |resize(start,end,5,"center")._1 as start_2,
-        |resize(start,end,5,"center")._2 as end_2 
-        |FROM ref LIMIT 1
-   """.stripMargin
+    val query =
+     s"""
+        |SELECT start, end, resize(start,end,5,"center") as resizedInterval FROM ref
+      """.stripMargin
 
 calcOverlap
 ************
@@ -117,8 +127,50 @@ calcOverlap function returns the width of overlap between intervals. To use the 
        |
          """.stripMargin
 
+flank
+*******
 
+Flank function is performing operation of calculating the flanking range with specified width. First boolean argument indicates whether flanking should be performed from start of range (true) or end (false). 
+Second boolean argument set to true indicates that flanking range should contain not only outside of original range, but also inside. In that case width of flanking range is doubled. Flank function returns range with start and end fields. Sample query using flank function:
 
+::
+
+   spark.sqlContext.udf.register("flank", RangeMethods.flank _)
+
+    val query =
+      s"""
+        |SELECT start, end, flank(start,end,5,true,true) as flankedInterval FROM ref
+       """.stripMargin
+   
+promoters
+*********
+
+Promoters function is performing operation of calculating promoter for the range with given upstream and downstream. It returns range with start and end fields. Sample query using promoters function:
+
+::
+
+    spark.sqlContext.udf.register("promoters", RangeMethods.promoters _)
+
+    val query =
+      s"""
+        |SELECT start, end, promoters(start,end,100,20) as promoterInterval FROM ref
+       """.stripMargin
+
+reflect
+*******
+
+Reflect function is performing operation of reversing the range relative to specified reference bounds. It returns range with start and end fields. Sample query using reflect function:
+
+::
+
+    spark.sqlContext.udf.register("reflect", RangeMethods.reflect _)
+
+    val query =
+      s"""
+        |SELECT start, end, reflect(start,end,11000,15000) as reflectedInterval FROM ref
+       """.stripMargin 
+   
+   
 Additional parameteres
 ######################
 
@@ -158,5 +210,19 @@ Parameter is set via coniguration:
 ::
 
    spark.sqlContext.setConf("spark.biodatageeks.rangejoin.maxBroadcastSize", (10*(1024*1024)).toString)
+
+
+useJoinOrder
+**************
+If this parameter is set to FALSE the algorithm itself decides which table is used for broadcasting. It performs row counting on both tables and chooses smaller one. 
+
+To achieve even better performance you can set this parameter to TRUE. In this case, the algorithm does not check table sizes but blindly broadcasts first table.  You should use this parameter if you know table sizes beforehand
+
+By default the parameter is set to false.
+
+Parameter is set via coniguration:
+::
+
+   spark.sqlContext.setConf("spark.biodatageeks.rangejoin.useJoinOrder", "true")
 
 
