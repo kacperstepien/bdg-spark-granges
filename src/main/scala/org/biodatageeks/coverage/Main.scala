@@ -17,11 +17,19 @@
   */
 package org.biodatageeks.coverage
 
+import java.io.{OutputStreamWriter, PrintWriter}
+
 import org.apache.spark.sql.{Dataset, SparkSession}
+import org.bdgenomics.utils.instrumentation.{Metrics, MetricsListener, RecordedMetrics}
 import org.biodatageeks.datasources.BAM.{BAMDataSource, BAMRecord}
 import org.biodatageeks.coverage.CoverageReadDatasetFunctions._
+import org.biodatageeks.coverage.CoverageFunctionsSlimHist._
+
 object Main {
+  val metricsListener = new MetricsListener(new RecordedMetrics())
+  val writer = new PrintWriter(new OutputStreamWriter(System.out))
   def main(args: Array[String]) {
+
     val spark = SparkSession
       .builder()
       .appName("ExtraStrategiesGenApp")
@@ -30,19 +38,22 @@ object Main {
       .getOrCreate()
     val sc = spark.sparkContext
     val sqlContext = spark.sqlContext
-    sqlContext.udf.register("coverage", new Coverage())
-    spark.sql(s"DROP TABLE IF EXISTS bam")
-    spark.sql(
-      s"""
-         |CREATE TABLE bam
-         |USING org.biodatageeks.datasources.BAM.BAMDataSource
-         |OPTIONS(path "/home/kacper/Pobrane/exome/FIRST_300.HG00096.mapped.ILLUMINA.bwa.GBR.exome.20111114.bam")
-         |
-      """.stripMargin)
-    val ds:Dataset[BAMRecord]=spark.sql("select * from bam").transform[BAMRecord](r => new BAMRecord(r.))
-    spark.read.
-    spark.sql(
-      "select coverage(start,contigName,cigar) from bam limit 100"
-    ).show
-  }
+ Metrics.initialize(spark.sparkContext)
+ sc.addSparkListener(metricsListener)
+import spark.implicits._
+ val bamPath = "/home/kacper/Pobrane/exome/FIRST_300.HG00096.mapped.ILLUMINA.bwa.GBR.exome.20111114.bam"
+ val dataset = spark
+   .read
+   .format("org.biodatageeks.datasources.BAM.BAMDataSource")
+   .load(bamPath)
+   .as[BAMRecord]
+
+    var start = System.nanoTime()
+ val coverage = dataset.baseCoverageHistDataset(None, None,CoverageHistParam(CoverageHistType.MAPQ,Array(10,20,30,40)))
+    println((System.nanoTime() - start) / 1000)
+ coverage.saveCoverageAsParquet("/home/kacper/coverage_dataset.parquet",sort=false)
+
+ Metrics.print(writer, Some(metricsListener.metrics.sparkMetrics.stageTimes))
+ writer.flush();
+}
 }

@@ -2,7 +2,7 @@ package org.biodatageeks.coverage
 
 import breeze.linalg.max
 import htsjdk.samtools.{CigarOperator, TextCigarCodec}
-import org.apache.spark.sql.{Dataset, Encoders}
+import org.apache.spark.sql.{Dataset, Encoders, SQLContext}
 import org.apache.spark.sql.functions._
 import org.apache.spark.storage.StorageLevel
 import org.biodatageeks.coverage.CoverageHistType.CoverageHistType
@@ -12,6 +12,8 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.util.control.Breaks._
 import org.biodatageeks.coverage.CoverageTimers._
+import org.apache.spark.sql.functions._
+import scala.collection.immutable.Map
 /**
  * Created by kstepien on 15.04.18.
  */
@@ -55,12 +57,13 @@ case class PartitionCoverage(covMap: HashMap[(String, Int), Array[Int]],
                              outputSize: Int,
                              chrMinMax: Array[(String,Int)]
                             )
-case class PartitionCoverageHist(covMap: HashMap[(String, Int), (Array[Array[Int]],Array[Int])],
+
+
+case class PartitionCoverageHist(covMap: Map[(String, Int), (Array[Array[Int]],Array[Int])],
                                  maxCigarLength: Int,
                                  outputSize: Int,
                                  chrMinMax: Array[(String,Int)]
                                 )
-
 
 case class CoverageHistParam(
                               histType : CoverageHistType,
@@ -87,7 +90,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
       CovTableWriterTimer.time {
         covQual
           //.instrument()
-          .sort(asc("sampleId"),asc("chr"),asc("position"))
+          .sort(asc("sampleId"),asc("contigName"),asc("start"))
           .mapPartitions{partIterator =>
 
             val covMap = new HashMap[(String, Int), Int]()
@@ -118,17 +121,20 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
               }
             }
             Iterator(covMap)
-          }(Encoders.kryo[mutable.HashMap[(String,Int),Int]]).flatMap(r => r)
-          .groupByKey(_._1)
-          .reduceGroups((a, b) => (a._1, a._2 + b._2))
-          .map(_._2)
-          .map {case ((chr, pos), cov) => CoverageRecordSlim(chr, pos, cov) }
+          }(Encoders.kryo[mutable.HashMap[(String,Int),Int]])
+          .flatMap(r => r)
+
+          .groupBy("_1").sum("_2").map(r=>CoverageRecordSlim(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getLong(1).toInt))
+          //.mapGroups{case ((chr, pos), cov) => CoverageRecordSlim(chr, pos, cov.reduce(_._2+_._2)) }
+          //.reduceGroups((a, b) => (a._1, a._2 + b._2))
+          //.map(_._2)
+          //.map {case ((chr, pos), cov) => CoverageRecordSlim(chr, pos, cov) }
       }
     }
   }
 
 
-  def baseCoverageHistDataset(minMapq: Option[Int], numTasks: Option[Int] = None, coverageHistParam: CoverageHistParam) /*: RDD[CoverageRecordSlimHist]*/ = {
+  def baseCoverageHistDataset(minMapq: Option[Int], numTasks: Option[Int] = None, coverageHistParam: CoverageHistParam) : Dataset[CoverageRecordSlimHist] = {
     val spark = covReadDataset.sparkSession
 
     import spark.implicits._
@@ -143,7 +149,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
       case _ => cov
     }
     lazy val partCov = covQual
-      .sort(asc("chr"),asc("position"))
+      .sort(asc("contigName"),asc("start"))
       .mapPartitions { partIterator =>
         val covMap = new HashMap[(String, Int), (Array[Array[Int]], Array[Int])]()
         val numSubArrays = 10000
@@ -176,14 +182,14 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
                   if(coverageHistParam.histType == CoverageHistType.MAPQ) {
                     breakable {
                       for (i <- 0 until params.length) {
-                        if ( i < params.length-1  && cr.quality >= params(i) && cr.quality < params(i+1)) {
+                        if ( i < params.length-1  && cr.mapq >= params(i) && cr.mapq < params(i+1)) {
                           covMap(cr.contigName, index)._1(subIndex)(i) += 1
                           break
                         }
                       }
 
                     }
-                    if (cr.quality >= params.last) covMap(cr.contigName, index)._1(subIndex)(params.length-1) += 1
+                    if (cr.mapq >= params.last) covMap(cr.contigName, index)._1(subIndex)(params.length-1) += 1
                   }
                   else throw new Exception("Unsupported histogram parameter")
 
@@ -207,7 +213,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
           lastChr = cr.contigName
         }
         chrMinMax.append((lastChr, lastPosition))
-        Array(PartitionCoverageHist(covMap, maxCigarLength, outputSize, chrMinMax.toArray)).iterator
+        Iterator(PartitionCoverageHist(covMap.toMap, maxCigarLength, outputSize, chrMinMax.toArray))//.iterator
       }.persist(StorageLevel.MEMORY_AND_DISK_SER)
     val maxCigarLengthGlobal = partCov.map(r => r.maxCigarLength)
       .reduce((a, b) => max(a, b))
@@ -276,7 +282,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
       CovTableWriterTimer.time {
         lazy val partCov ={ sorted match {
           case true => covQual//.instrument()
-          case _ => covQual.sort(asc("chr"),asc("position"))
+          case _ => covQual.sort(asc("contigName"),asc("start"))
         }}.mapPartitions { partIterator =>
             val covMap = new HashMap[(String, Int), Array[Int]]()
             val numSubArrays = 10000
@@ -384,7 +390,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
         val covMap = new mutable.HashMap[(String,String,String,Int),Int]()
         covQual
           //.instrument()
-          .sort(asc("sampleId"),asc("chr"),asc("position"))
+          .sort(asc("sampleId"),asc("contigName"),asc("start"))
           .mapPartitions{partIterator =>
             val covMap = new mutable.HashMap[(String, String, String, Int), Int]()
             for(cr <- partIterator) {
@@ -400,10 +406,10 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
                     var currPosition = 0
                     while (currPosition < cigarOpLength) {
                       //covArray(currPosition) = (((cr.sampleId, cr.condition, cr.chr, position), 1))
-                      if(covMap.keySet.contains((cr.sampleId, cr.basequality, cr.contigName, position)) )
-                        covMap+= (cr.sampleId, cr.basequality, cr.contigName, position) -> (covMap(cr.sampleId, cr.basequality, cr.contigName, position) + 1 )
+                      if(covMap.keySet.contains((cr.sampleId, cr.baseq, cr.contigName, position)) )
+                        covMap+= (cr.sampleId, cr.baseq, cr.contigName, position) -> (covMap(cr.sampleId, cr.baseq, cr.contigName, position) + 1 )
                       else
-                        covMap += (cr.sampleId, cr.basequality, cr.contigName, position) -> (1)
+                        covMap += (cr.sampleId, cr.baseq, cr.contigName, position) -> (1)
 
                       position += 1
                       currPosition += 1
@@ -440,6 +446,78 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
     countsMap
   }
 }
+
+class CoverageFunctionsSlim(coverageDataset:Dataset[CoverageRecordSlim]) extends Serializable {
+
+  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
+
+  /**
+    *
+    * @param path
+    */
+  def saveCoverageAsParquet(path: String, sort:Boolean = false) = {
+    val covDF = coverageDataset.toDF()
+    if(sort) {
+      covDF
+        .orderBy("contigName", "start")
+        .write
+        .option("compression", "gzip")
+        .save(path)
+    }
+    else{
+      covDF
+        .write
+        .option("compression", "gzip")
+        .save(path)
+    }
+  }
+}
+
+class CoverageFunctionsSlimHist(coverageDataset:Dataset[CoverageRecordSlimHist]) extends Serializable {
+
+  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
+
+  /**
+    *
+    * @param path
+    */
+  def saveCoverageAsParquet(path: String, sort:Boolean = false) = {
+    val covDF = coverageDataset.toDF()
+    if(sort) {
+      covDF
+        .orderBy("contigName", "start")
+        .write
+        .option("compression", "gzip")
+        .save(path)
+    }
+    else{
+      covDF
+        .write
+        .option("compression", "gzip")
+        .save(path)
+    }
+  }
+}
+
+
+class CoverageFunctions(coverageDataset:Dataset[CoverageRecord]) extends Serializable {
+
+  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
+
+  /**
+    *
+    * @param path
+    */
+  def saveCoverageAsParquet(path: String) = {
+    val covDF = coverageDataset.toDF()
+    covDF
+      .orderBy("contigName", "start")
+      .write
+      .option("compression", "gzip")
+      .save(path)
+  }
+}
+
 object CoverageReadDatasetFunctions {
 
   implicit def addCoverageReadDatasetFunctions(dataset: Dataset[BAMRecord]) = {
@@ -447,3 +525,18 @@ object CoverageReadDatasetFunctions {
 
   }
 }
+
+  object CoverageFunctions {
+    implicit def addCoverageFunctions(dataset: Dataset[CoverageRecord]) = new
+        CoverageFunctions(dataset)
+  }
+
+  object CoverageFunctionsSlim {
+    implicit def addCoverageFunctionsSlim(dataset: Dataset[CoverageRecordSlim]) = new
+        CoverageFunctionsSlim(dataset)
+  }
+
+  object CoverageFunctionsSlimHist {
+    implicit def addCoverageFunctionsSlimHist(dataset: Dataset[CoverageRecordSlimHist]) = new
+        CoverageFunctionsSlimHist(dataset)
+  }
