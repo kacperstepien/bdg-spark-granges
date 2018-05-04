@@ -13,64 +13,13 @@ import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.util.control.Breaks._
 import org.biodatageeks.coverage.CoverageTimers._
 import org.apache.spark.sql.functions._
+import org.biodatageeks.datasources.ADAM.ADAMRecord
+
 import scala.collection.immutable.Map
 /**
- * Created by kstepien on 15.04.18.
+ * Created by kstepien on 04.05.18.
  */
-
-case class CoverageReadRecord(sampleId:String,
-                              condition:String,
-                              chr:String,
-                              position:Int,
-                              cigar:htsjdk.samtools.Cigar,
-                              mapq:Int,
-                              samFlags: Int)
-
-case class CoverageRecord(sampleId:String,
-                          condition:String,
-                          chr:String,
-                          position:Int,
-                          coverage:Double)
-
-
-case class CoverageRecordSlim(chr:String,
-                              position:Int,
-                              coverage:Int)
-
-case class CoverageRecordSlimHist(chr:String,
-                                  position:Int,
-                                  coverage:Array[Int],
-                                  coverageTotal:Int)
-
-
-case class CoverageIntervalRecord(sampleId:String,
-                                  condition:String,
-                                  chr:String,
-                                  position_start:Int,
-                                  postition_stop:Int,
-                                  coverage:Double)
-
-case class StatDist(statDist: Array[Double])
-
-case class PartitionCoverage(covMap: HashMap[(String, Int), Array[Int]],
-                             maxCigarLength: Int,
-                             outputSize: Int,
-                             chrMinMax: Array[(String,Int)]
-                            )
-
-
-case class PartitionCoverageHist(covMap: Map[(String, Int), (Array[Array[Int]],Array[Int])],
-                                 maxCigarLength: Int,
-                                 outputSize: Int,
-                                 chrMinMax: Array[(String,Int)]
-                                )
-
-case class CoverageHistParam(
-                              histType : CoverageHistType,
-                              buckets: Array[Double]
-                            )
-
-class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Serializable{
+class CoverageReadADAMFunctions(covReadDataset:Dataset[ADAMRecord]) extends Serializable{
 
 
   def baseCoverageBaselineDataset(minMapq: Option[Int], numTasks: Option[Int] = None): Dataset[CoverageRecordSlim] ={
@@ -107,10 +56,10 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
                     var currPosition = 0
                     //covArray(currPosition) = (((cr.sampleId, cr.condition, cr.chr, position), 1))
                     while (currPosition < cigarOpLength) {
-                      if(covMap.keySet.contains((cr.contigName, position)) )
-                        covMap+= (cr.contigName, position) -> (covMap(cr.contigName, position) + 1 )
+                      if(covMap.keySet.contains((cr.contigName, position.toInt)) )
+                        covMap+= (cr.contigName, position.toInt) -> (covMap(cr.contigName, position.toInt) + 1 )
                       else
-                        covMap += (cr.contigName, position) -> (1)
+                        covMap += (cr.contigName, position.toInt) -> (1)
 
                       position += 1
                       currPosition += 1
@@ -124,7 +73,9 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
           }(Encoders.kryo[mutable.HashMap[(String,Int),Int]])
           .flatMap(r => r)
 
-          .groupBy("_1").sum("_2").map(r=>CoverageRecordSlim(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getLong(1).toInt))
+          .groupBy("_1")
+          .sum("_2")
+          .map(r=>CoverageRecordSlim(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getLong(1).toInt))
           //.mapGroups{case ((chr, pos), cov) => CoverageRecordSlim(chr, pos, cov.reduce(_._2+_._2)) }
           //.reduceGroups((a, b) => (a._1, a._2 + b._2))
           //.map(_._2)
@@ -162,7 +113,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
         for (cr <- partIterator) {
           val cigar = TextCigarCodec.decode(cr.cigar)
           val cigInterator = cigar.getCigarElements.iterator()
-          var position = cr.start
+          var position = cr.start.toInt
           val cigarStartPosition = position
           while (cigInterator.hasNext) {
             val cigarElement = cigInterator.next()
@@ -248,10 +199,22 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
       Iterator(output)
     }(Encoders.kryo[Array[Array[CoverageRecordSlimHist]]])
     //partCov.unpersist()
-    lazy val covReduced =  combOutput.flatMap(r=>r.array(1)).map(r=>((r.chr,r.position),r))
-      .groupByKey(_._1)
-      .reduceGroups((a,b)=>(a._1,CoverageRecordSlimHist(a._2.chr,a._2.position,sumArrays(a._2.coverage,b._2.coverage),a._2.coverageTotal+b._2.coverageTotal)))
-      .map(_._2._2)
+    val sa:SumArrays = new SumArrays();
+    lazy val covReduced =  combOutput
+      .flatMap(r=>r.array(1))
+      .map(r=>((r.chr,r.position),r))
+      .groupBy("_1").agg(sa($"_2.coverage"),sum("_2.coverageTotal"))
+
+        //.map(r=>CoverageRecordSlimHist(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getAs[Array[Int]](1),r.getLong(2).toInt))
+      .map(r=>CoverageRecordSlimHist(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getSeq[Int](1).toArray,r.getLong(2).toInt))
+      //.groupByKey(_._1)
+      //.reduceGroups((a,b)=>(a._1,CoverageRecordSlimHist(a._2.chr,a._2.position,sumArrays(a._2.coverage,b._2.coverage),a._2.coverageTotal+b._2.coverageTotal)))
+      //.map(_._2._2)
+
+      //.groupBy("_1")
+      //.sum("_2")
+      //.map(r=>CoverageRecordSlim(r.getStruct(0).getString(0), r.getStruct(0).getInt(1), r.getLong(1).toInt))
+
     partCov.unpersist()
     combOutput.flatMap(r => (r.array(0)))
       .union(covReduced)
@@ -295,7 +258,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
             for (cr <- partIterator) {
               val cigar = TextCigarCodec.decode(cr.cigar)
               val cigInterator = cigar.getCigarElements.iterator()
-              var position = cr.start
+              var position = cr.start.toInt
               val cigarStartPosition = position
               while (cigInterator.hasNext) {
                 val cigarElement = cigInterator.next()
@@ -315,7 +278,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
                     currPosition += 1
 
                     /*add first*/
-                    if (outputSize == 0) chrMinMax.append((cr.contigName, position))
+                    if (outputSize == 0) chrMinMax.append((cr.contigName, position.toInt))
                     if (covMap(cr.contigName, index)(subIndex) == 1) outputSize += 1
 
                   }
@@ -361,7 +324,9 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
           Iterator(output)
         }(Encoders.kryo[Array[Array[CoverageRecordSlim]]])
         //partCov.unpersist()
-        lazy val covReduced =  combOutput.flatMap(r=>r.array(1)).map(r=>((r.chr,r.position),r))
+        lazy val covReduced =  combOutput.
+          flatMap(r=>r.array(1))
+          .map(r=>((r.chr,r.position),r))
               .groupByKey(r=>r._1)
             .reduceGroups((a,b) => (a._1,CoverageRecordSlim(a._1._1,a._1._2,a._2.coverage+b._2.coverage)))
           .map(_._2._2)
@@ -396,7 +361,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
             for(cr <- partIterator) {
               val cigar = TextCigarCodec.decode(cr.cigar)
               val cigInterator = cigar.getCigarElements.iterator()
-              var position = cr.start
+              var position = cr.start.toInt
               while (cigInterator.hasNext) {
                 val cigarElement = cigInterator.next()
                 val cigarOpLength = cigarElement.getLength
@@ -406,10 +371,10 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
                     var currPosition = 0
                     while (currPosition < cigarOpLength) {
                       //covArray(currPosition) = (((cr.sampleId, cr.condition, cr.chr, position), 1))
-                      if(covMap.keySet.contains((cr.sampleId, cr.baseq, cr.contigName, position)) )
-                        covMap+= (cr.sampleId, cr.baseq, cr.contigName, position) -> (covMap(cr.sampleId, cr.baseq, cr.contigName, position) + 1 )
+                      if(covMap.keySet.contains((cr.readName, cr.qual, cr.contigName, position)) )
+                        covMap+= (cr.readName, cr.qual, cr.contigName, position) -> (covMap(cr.readName, cr.qual, cr.contigName, position) + 1 )
                       else
-                        covMap += (cr.sampleId, cr.baseq, cr.contigName, position) -> (1)
+                        covMap += (cr.readName, cr.qual, cr.contigName, position) -> (1)
 
                       position += 1
                       currPosition += 1
@@ -421,7 +386,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
             }
             Iterator(covMap)
           }(Encoders.kryo[mutable.HashMap[(String,String,String,Int),Int]]).flatMap(r => r)
-            .groupByKey(r=> r._1)
+          .groupByKey(r=> r._1)
             .reduceGroups((a,b)=>(a._1,a._2+b._2))
           .map(r=>r._2)
           .map { case ((sampleId, condition, chr, pos), cov) => CoverageRecord(sampleId, condition, chr, pos, cov) }
@@ -437,7 +402,7 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
     val countsMap = new HashMap[String,Long]()
 
     covReadDataset
-      .map(r=>(r.sampleId,1))
+      .map(r=>(r.readName,1))
       .groupByKey(r=>r._1)
         .reduceGroups((a,b)=>(a._1,a._2+b._2))
       .map(r=>r._2)
@@ -447,96 +412,10 @@ class CoverageReadDatasetFunctions(covReadDataset:Dataset[BAMRecord]) extends Se
   }
 }
 
-class CoverageFunctionsSlim(coverageDataset:Dataset[CoverageRecordSlim]) extends Serializable {
+object CoverageReadADAMFunctions {
 
-  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
-
-  /**
-    *
-    * @param path
-    */
-  def saveCoverageAsParquet(path: String, sort:Boolean = false) = {
-    val covDF = coverageDataset.toDF()
-    if(sort) {
-      covDF
-        .orderBy("contigName", "start")
-        .write
-        .option("compression", "gzip")
-        .save(path)
-    }
-    else{
-      covDF
-        .write
-        .option("compression", "gzip")
-        .save(path)
-    }
-  }
-}
-
-class CoverageFunctionsSlimHist(coverageDataset:Dataset[CoverageRecordSlimHist]) extends Serializable {
-
-  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
-
-  /**
-    *
-    * @param path
-    */
-  def saveCoverageAsParquet(path: String, sort:Boolean = false) = {
-    val covDF = coverageDataset.toDF()
-    if(sort) {
-      covDF
-        .orderBy("contigName", "start")
-        .write
-        .option("compression", "gzip")
-        .save(path)
-    }
-    else{
-      covDF
-        .write
-        .option("compression", "gzip")
-        .save(path)
-    }
-  }
-}
-
-
-class CoverageFunctions(coverageDataset:Dataset[CoverageRecord]) extends Serializable {
-
-  val sqlContext = new SQLContext(coverageDataset.sparkSession.sparkContext)
-
-  /**
-    *
-    * @param path
-    */
-  def saveCoverageAsParquet(path: String) = {
-    val covDF = coverageDataset.toDF()
-    covDF
-      .orderBy("contigName", "start")
-      .write
-      .option("compression", "gzip")
-      .save(path)
-  }
-}
-
-object CoverageReadDatasetFunctions {
-
-  implicit def addCoverageReadDatasetFunctions(dataset: Dataset[BAMRecord]) = {
-    new CoverageReadDatasetFunctions(dataset)
+  implicit def addCoverageReadDatasetFunctions(dataset: Dataset[ADAMRecord]) = {
+    new CoverageReadADAMFunctions(dataset)
 
   }
 }
-
-  object CoverageFunctions {
-    implicit def addCoverageFunctions(dataset: Dataset[CoverageRecord]) = new
-        CoverageFunctions(dataset)
-  }
-
-  object CoverageFunctionsSlim {
-    implicit def addCoverageFunctionsSlim(dataset: Dataset[CoverageRecordSlim]) = new
-        CoverageFunctionsSlim(dataset)
-  }
-
-  object CoverageFunctionsSlimHist {
-    implicit def addCoverageFunctionsSlimHist(dataset: Dataset[CoverageRecordSlimHist]) = new
-        CoverageFunctionsSlimHist(dataset)
-  }
